@@ -42,10 +42,12 @@ export interface Admin {
 
 export type Modalidad = 'remoto' | 'hibrido' | 'presencial'
 export type TipoVacante = 'practica' | 'medio_tiempo' | 'tiempo_completo'
+export type TipoOferta = 'empleo' | 'practica'
 
 export interface Vacante {
   id: string
   titulo: string
+  tipoOferta: TipoOferta
   empresa: string
   empresaId: string
   sector: string
@@ -68,6 +70,7 @@ export type EstadoPostulacion =
   | 'entrevista'
   | 'aceptado'
   | 'rechazado'
+  | 'retirado'
 
 export interface Postulacion {
   id: string
@@ -80,6 +83,7 @@ export interface Postulacion {
   compatibilidad: number
   modalidad: Modalidad
   proximoPaso?: string
+  notaEmpresa?: string
 }
 
 export type EstadoPractica = 'activa' | 'finalizada' | 'cancelada'

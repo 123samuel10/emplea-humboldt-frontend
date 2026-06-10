@@ -45,3 +45,39 @@ export function Badge({ tone = 'gray', children }: { tone?: keyof typeof BADGE_T
     </span>
   )
 }
+
+/** Estado de carga genérico. */
+export function Loading({ label = 'Cargando...' }: { label?: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 py-12 text-sm text-ink-tertiary">
+      <span className="w-4 h-4 border-2 border-ink-muted border-t-transparent rounded-full animate-spin" />
+      {label}
+    </div>
+  )
+}
+
+/** Estado de error con opción de reintentar. */
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <Card className="border-semantic-error-border bg-semantic-error-bg">
+      <p className="text-sm text-semantic-error">{message}</p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="mt-3 h-8 px-3 bg-surface-2 border border-default rounded-lg text-xs font-medium text-ink-secondary hover:bg-surface-3"
+        >
+          Reintentar
+        </button>
+      )}
+    </Card>
+  )
+}
+
+/** Estado vacío (sin resultados). */
+export function EmptyState({ message }: { message: string }) {
+  return (
+    <Card>
+      <p className="text-sm text-ink-tertiary text-center py-6">{message}</p>
+    </Card>
+  )
+}

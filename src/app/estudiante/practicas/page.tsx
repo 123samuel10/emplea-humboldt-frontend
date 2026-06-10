@@ -1,25 +1,28 @@
 'use client'
 
-import { PageHeader, Card, Badge, StatCard } from '@/components/ui'
-import { mockPractica } from '@/lib/mock-data'
+import { useQuery } from '@tanstack/react-query'
+import { PageHeader, Card, Badge, StatCard, Loading, ErrorState, EmptyState } from '@/components/ui'
+import { cargarMisPracticas } from '@/lib/adapters'
+import { apiErrorMessage } from '@/lib/api'
 import { formatFecha } from '@/lib/utils'
+import type { Practica } from '@/lib/types'
 
-export default function PracticasPage() {
-  const p = mockPractica
+const ESTADO_LABEL: Record<Practica['estado'], { label: string; tone: 'green' | 'gray' | 'red' }> = {
+  activa:     { label: 'Activa',     tone: 'green' },
+  finalizada: { label: 'Finalizada', tone: 'gray' },
+  cancelada:  { label: 'Cancelada',  tone: 'red' },
+}
 
+function PracticaCard({ p }: { p: Practica }) {
   return (
-    <div className="max-w-4xl">
-      <PageHeader title="Mi práctica" subtitle="Seguimiento de tu práctica profesional en curso" />
-
-      <Card className="mb-6">
+    <div className="mb-8">
+      <Card className="mb-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-base font-semibold text-ink-primary">{p.cargo}</p>
             <p className="text-sm text-ink-tertiary mt-0.5">{p.empresa}</p>
           </div>
-          <Badge tone={p.estado === 'activa' ? 'green' : 'gray'}>
-            {p.estado === 'activa' ? 'Activa' : p.estado}
-          </Badge>
+          <Badge tone={ESTADO_LABEL[p.estado].tone}>{ESTADO_LABEL[p.estado].label}</Badge>
         </div>
 
         <div className="mt-5">
@@ -40,6 +43,29 @@ export default function PracticasPage() {
         <StatCard label="Informes pendientes" value={p.informesPendientes} hint={p.informesPendientes > 0 ? 'Entrega antes del cierre' : 'Al día'} />
         <StatCard label="Calificación" value={p.calificacion ?? '—'} />
       </div>
+    </div>
+  )
+}
+
+export default function PracticasPage() {
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['mis-practicas'],
+    queryFn: cargarMisPracticas,
+  })
+
+  return (
+    <div className="max-w-4xl">
+      <PageHeader title="Mis prácticas" subtitle="Seguimiento de tus prácticas profesionales" />
+
+      {isLoading ? (
+        <Loading label="Cargando prácticas..." />
+      ) : isError ? (
+        <ErrorState message={apiErrorMessage(error, 'No se pudieron cargar tus prácticas.')} onRetry={() => refetch()} />
+      ) : (data?.length ?? 0) === 0 ? (
+        <EmptyState message="Aún no tienes prácticas registradas." />
+      ) : (
+        data!.map(p => <PracticaCard key={p.id} p={p} />)
+      )}
     </div>
   )
 }

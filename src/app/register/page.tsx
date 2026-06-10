@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { forwardRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { GraduationCap, Building2, Eye, EyeOff, Check } from 'lucide-react'
@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { cn } from '@/lib/utils'
-import { authApi, setTokens, ApiError } from '@/lib/api'
+import { authApi, setTokens, apiErrorMessage } from '@/lib/api'
 
 type Role = 'estudiante' | 'empresa'
 
@@ -34,11 +34,23 @@ const baseSchema = {
   confirmar: z.string(),
 }
 
+// Universidad fija: la plataforma es exclusiva de la Universidad Alexander Von Humboldt.
+const UNIVERSIDAD = 'Universidad Alexander Von Humboldt'
+// Dominios de correo institucional aceptados.
+const DOMINIOS_INSTITUCIONALES = ['unihumboldt.edu.co', 'cue.edu.co'] as const
+
 const estudianteSchema = z.object({
   ...baseSchema,
+  // El correo del estudiante debe pertenecer a un dominio institucional válido.
+  email: z
+    .string()
+    .email('Correo no válido')
+    .refine(
+      (v) => DOMINIOS_INSTITUCIONALES.some((d) => v.toLowerCase().endsWith(`@${d}`)),
+      'Usa tu correo institucional (@unihumboldt.edu.co o @cue.edu.co)',
+    ),
   nombre:        z.string().min(3, 'Requerido'),
   apellido:      z.string().min(3, 'Requerido'),
-  universidad:   z.string().min(3, 'Requerido'),
   programa:      z.string().min(3, 'Requerido'),
   semestre:      z.coerce.number().min(1).max(12),
   disponibilidad:z.enum(['tiempo_completo', 'medio_tiempo', 'fines_de_semana']),
@@ -88,15 +100,17 @@ function FieldError({ msg }: { msg?: string }) {
   return <p className="text-xs text-semantic-error mt-1">{msg}</p>
 }
 
-function FormInput({
-  label, error, required: req, ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string; required?: boolean }) {
+const FormInput = forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string; required?: boolean }
+>(function FormInput({ label, error, required: req, ...props }, ref) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-medium text-ink-secondary">
         {label}{req && <span className="text-brand-red ml-0.5">*</span>}
       </label>
       <input
+        ref={ref}
         className={cn(
           'h-9 px-3 bg-surface-2 border rounded text-sm text-ink-primary placeholder:text-ink-muted',
           'outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15 transition-colors',
@@ -107,17 +121,19 @@ function FormInput({
       <FieldError msg={error} />
     </div>
   )
-}
+})
 
-function FormSelect({
-  label, error, required: req, children, ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement> & { label: string; error?: string; required?: boolean }) {
+const FormSelect = forwardRef<
+  HTMLSelectElement,
+  React.SelectHTMLAttributes<HTMLSelectElement> & { label: string; error?: string; required?: boolean }
+>(function FormSelect({ label, error, required: req, children, ...props }, ref) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-medium text-ink-secondary">
         {label}{req && <span className="text-brand-red ml-0.5">*</span>}
       </label>
       <select
+        ref={ref}
         className={cn(
           'h-9 px-3 bg-surface-2 border rounded text-sm text-ink-primary',
           'outline-none focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15 transition-colors',
@@ -130,7 +146,7 @@ function FormSelect({
       <FieldError msg={error} />
     </div>
   )
-}
+})
 
 function EstudianteFields() {
   const { register, watch, formState: { errors }, handleSubmit } = useForm<EstudianteForm>({
@@ -147,28 +163,31 @@ function EstudianteFields() {
     setServerError('')
     setLoading(true)
     try {
+      // Paso 1: crear la cuenta con los datos mínimos.
       await authApi.registroEstudiante({
         email: data.email,
         password: data.password,
         nombres: data.nombre,
         apellidos: data.apellido,
-        universidad: data.universidad,
+        universidad: UNIVERSIDAD,
         programa: data.programa,
       })
-      // Iniciar sesión automáticamente tras el registro
+      // Paso 2: iniciar sesión automáticamente para obtener el JWT.
       const tokens = await authApi.login(data.email, data.password)
       setTokens(tokens.access_token, tokens.refresh_token)
+      // Paso 3: completar el perfil con los campos que el registro no recibe
+      // (semestre y disponibilidad). nombres/apellidos son obligatorios aquí.
+      await authApi.actualizarPerfilEstudiante({
+        nombres: data.nombre,
+        apellidos: data.apellido,
+        universidad: UNIVERSIDAD,
+        programa: data.programa,
+        semestre: data.semestre,
+        disponibilidad: data.disponibilidad,
+      })
       router.push('/estudiante/dashboard')
     } catch (err) {
-      if (err instanceof ApiError) {
-        setServerError(
-          err.status === 400 || err.status === 409
-            ? 'Ese correo ya está registrado.'
-            : `No se pudo crear la cuenta (HTTP ${err.status}).`,
-        )
-      } else {
-        setServerError('No se pudo conectar con el servidor. ¿Está corriendo el backend?')
-      }
+      setServerError(apiErrorMessage(err, 'No se pudo crear la cuenta.'))
       setLoading(false)
     }
   }
@@ -180,7 +199,8 @@ function EstudianteFields() {
         <FormInput label="Apellido" required error={errors.apellido?.message} placeholder="Salcedo" {...register('apellido')} />
       </div>
       <FormInput label="Correo institucional" type="email" required error={errors.email?.message} placeholder="correo@unihumboldt.edu.co" {...register('email')} />
-      <FormInput label="Universidad" required error={errors.universidad?.message} placeholder="Universidad Alexander Von Humboldt" {...register('universidad')} />
+      {/* La universidad es fija (Alexander Von Humboldt); se muestra solo como referencia, no se edita. */}
+      <FormInput label="Universidad" value={UNIVERSIDAD} disabled readOnly />
       <div className="grid sm:grid-cols-2 gap-4">
         <FormInput label="Programa académico" required error={errors.programa?.message} placeholder="Ingeniería de Software" {...register('programa')} />
         <FormInput label="Semestre actual" type="number" min={1} max={12} required error={errors.semestre?.message} placeholder="7" {...register('semestre')} />
@@ -259,6 +279,7 @@ function EmpresaFields() {
     setServerError('')
     setLoading(true)
     try {
+      // Paso 1: crear la cuenta con los datos mínimos.
       await authApi.registroEmpresa({
         email: data.email,
         password: data.password,
@@ -266,20 +287,21 @@ function EmpresaFields() {
         nit: data.nit,
         contacto_nombre: data.nombre,
       })
-      // Iniciar sesión automáticamente tras el registro
+      // Paso 2: iniciar sesión automáticamente para obtener el JWT.
       const tokens = await authApi.login(data.email, data.password)
       setTokens(tokens.access_token, tokens.refresh_token)
+      // Paso 3: completar el perfil con los campos que el registro no recibe
+      // (ciudad y sector). nombre_empresa es obligatorio aquí.
+      await authApi.actualizarPerfilEmpresa({
+        nombre_empresa: data.razonSocial,
+        nit: data.nit,
+        sector: data.sector,
+        ciudad: data.ciudad,
+        contacto_nombre: data.nombre,
+      })
       router.push('/empresa/dashboard')
     } catch (err) {
-      if (err instanceof ApiError) {
-        setServerError(
-          err.status === 400 || err.status === 409
-            ? 'Ese correo ya está registrado.'
-            : `No se pudo crear la cuenta (HTTP ${err.status}).`,
-        )
-      } else {
-        setServerError('No se pudo conectar con el servidor. ¿Está corriendo el backend?')
-      }
+      setServerError(apiErrorMessage(err, 'No se pudo crear la cuenta empresarial.'))
       setLoading(false)
     }
   }
@@ -288,7 +310,7 @@ function EmpresaFields() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <FormInput label="Nombre del contacto" required error={errors.nombre?.message} placeholder="Carlos Herrera" {...register('nombre')} />
       <FormInput label="Correo corporativo" type="email" required error={errors.email?.message} placeholder="contacto@empresa.com.co" {...register('email')} />
-      <FormInput label="Razón social" required error={errors.razonSocial?.message} placeholder="TechCorp Colombia S.A.S" {...register('razonSocial')} />
+      <FormInput label="Nombre de empresa" required error={errors.razonSocial?.message} placeholder="TechCorp Colombia S.A.S" {...register('razonSocial')} />
       <div className="grid sm:grid-cols-2 gap-4">
         <FormInput label="NIT" required error={errors.nit?.message} placeholder="900.123.456-7" {...register('nit')} />
         <FormInput label="Ciudad" required error={errors.ciudad?.message} placeholder="Armenia, Quindío" {...register('ciudad')} />

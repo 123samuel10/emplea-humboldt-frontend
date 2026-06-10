@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
-import { authApi, setTokens, ApiError, type TipoUsuario } from '@/lib/api'
+import { authApi, setTokens, ApiError, apiErrorMessage, type TipoUsuario } from '@/lib/api'
 
 // A qué dashboard redirigir según el rol que devuelve el backend.
 const DASHBOARD_POR_ROL: Record<TipoUsuario, string> = {
@@ -35,14 +35,11 @@ export default function LoginPage() {
       const me = await authApi.me()
       router.push(DASHBOARD_POR_ROL[me.tipo_usuario] ?? '/')
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(
-          err.status === 401 || err.status === 422
-            ? 'Correo o contraseña incorrectos.'
-            : `Error del servidor (HTTP ${err.status}).`,
-        )
+      // Por seguridad no revelamos si el correo existe: 401/422 → mensaje genérico.
+      if (err instanceof ApiError && (err.status === 401 || err.status === 422)) {
+        setError('Correo o contraseña incorrectos.')
       } else {
-        setError('No se pudo conectar con el servidor. ¿Está corriendo el backend?')
+        setError(apiErrorMessage(err, 'No se pudo iniciar sesión.'))
       }
       setLoading(false)
     }
