@@ -1,22 +1,30 @@
 /**
  * Cliente central de API.
  *
- * Aquí viven las URLs base de cada microservicio (leídas del .env) y el helper
+ * Aquí vive la URL base del API Gateway (leída de NEXT_PUBLIC_API_URL) y el helper
  * `apiFetch` que arma las rutas y maneja JWT/errores. Cada pantalla debe llamar
  * a las funciones de este archivo en lugar de usar `mock-data`.
  *
- * Al desplegar, solo se cambian las variables NEXT_PUBLIC_API_* en el entorno;
- * este código no se toca.
+ * El API Gateway enruta automáticamente a cada microservicio según el path.
+ * En producción, Amplify inyecta NEXT_PUBLIC_API_URL automáticamente.
  */
 
 // ── URLs base por microservicio ─────────────────────────────────────────────
-// El fallback a localhost permite trabajar aunque falte el .env.local.
+// URL base del API Gateway (en producción viene de Amplify, en local de .env.local)
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+
+// En producción el API Gateway enruta:
+//   /autenticacion/* → Microservicio de Autenticación
+//   /empleos/* → Microservicio de Empleos
+//   /postulaciones/* → Microservicio de Postulaciones
+//   /seguimiento/* → Microservicio de Seguimiento
+//   /notificaciones/* → Microservicio de Notificaciones
 export const API = {
-  auth:           process.env.NEXT_PUBLIC_API_AUTH           ?? 'http://localhost:8000',
-  empleos:        process.env.NEXT_PUBLIC_API_EMPLEOS        ?? 'http://localhost:8001',
-  postulaciones:  process.env.NEXT_PUBLIC_API_POSTULACIONES  ?? 'http://localhost:8002',
-  seguimiento:    process.env.NEXT_PUBLIC_API_SEGUIMIENTO    ?? 'http://localhost:8003',
-  notificaciones: process.env.NEXT_PUBLIC_API_NOTIFICACIONES ?? 'http://localhost:8004',
+  auth:           `${API_BASE}/autenticacion`,
+  empleos:        `${API_BASE}/empleos`,
+  postulaciones:  `${API_BASE}/postulaciones`,
+  seguimiento:    `${API_BASE}/seguimiento`,
+  notificaciones: `${API_BASE}/notificaciones`,
 } as const
 
 // ── Manejo del token JWT (localStorage) ─────────────────────────────────────
